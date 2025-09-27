@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Layout, Tabs, message } from 'antd'
 import { Users, MessageCircle } from 'lucide-react'
@@ -13,13 +13,14 @@ const { Header, Content } = Layout
 
 function App() {
   const dispatch = useDispatch()
-  const { activeTab, welcomeBackModal } = useSelector(state => state.ui)
-  const candidates = useSelector(state => state.candidates.candidates)
-  
+  const { activeTab } = useSelector((state) => state.ui)
+  const candidates = useSelector((state) => state.candidates.candidates)
+  const [messageApi, contextHolder] = message.useMessage()
+
   useEffect(() => {
     // Initialize tab sync
     TabSync.init(dispatch)
-    
+
     // Check for in-progress sessions on load
     const inProgressCandidates = getInProgressCandidates(candidates)
     if (inProgressCandidates.length > 0) {
@@ -36,18 +37,18 @@ function App() {
           Interviewee
         </span>
       ),
-      children: <IntervieweePage />,
+      children: <IntervieweePage messageApi={messageApi} />,
     },
     {
-      key: 'interviewer', 
+      key: 'interviewer',
       label: (
         <span className="flex items-center gap-2 px-2">
           <Users size={18} />
           Interviewer
         </span>
       ),
-      children: <InterviewerPage />,
-    }
+      children: <InterviewerPage messageApi={messageApi} />,
+    },
   ]
 
   const handleTabChange = (key) => {
@@ -56,6 +57,7 @@ function App() {
 
   return (
     <Layout className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {contextHolder}
       <Header className="bg-white shadow-sm border-b border-slate-200">
         <div className="flex items-center justify-between h-full">
           <div className="flex items-center space-x-3">
@@ -69,7 +71,7 @@ function App() {
           </div>
         </div>
       </Header>
-      
+
       <Content className="p-6">
         <div className="max-w-7xl mx-auto">
           <Tabs
@@ -81,7 +83,7 @@ function App() {
           />
         </div>
       </Content>
-      
+
       <WelcomeBackModal />
     </Layout>
   )

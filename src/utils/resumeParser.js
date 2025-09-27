@@ -1,23 +1,30 @@
-import * as pdfjs from 'pdfjs-dist'
+// src/utils/resumeParser.js
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf'
 import mammoth from 'mammoth'
 
-// Set up PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`
+// Let Vite bundle and serve the worker correctly.
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/legacy/build/pdf.worker.min.js',
+  import.meta.url
+).toString()
 
 export async function parseResume(file) {
   const fileType = file.type
-  let text = ''
-
   try {
     if (fileType === 'application/pdf') {
-      text = await parsePDF(file)
-    } else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      text = await parseDOCX(file)
-    } else {
-      throw new Error('Unsupported file type')
+      const text = await parsePDF(file)
+      return extractFields(text)
     }
 
-    return extractFields(text)
+    if (
+      fileType ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
+      const text = await parseDOCX(file)
+      return extractFields(text)
+    }
+
+    throw new Error('Unsupported file type: ' + fileType)
   } catch (error) {
     console.error('Resume parsing error:', error)
     throw error
@@ -25,75 +32,94 @@ export async function parseResume(file) {
 }
 
 async function parsePDF(file) {
-  const arrayBuffer = await file.arrayBuffer()
-  const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise
-  
-  let text = ''
-  
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i)
-    const textContent = await page.getTextContent()
-    
-    const pageText = textContent.items
-      .map(item => item.str)
-      .join(' ')
-    
-    text += pageText + '\n'
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer })
+    const pdf = await loadingTask.promise
+
+    let text = ''
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i)
+      const textContent = await page.getTextContent()
+      const pageText = textContent.items
+        .map(item => (item.str ? item.str : ''))
+        .join(' ')
+      text += pageText + '\n'
+    }
+
+    return text
+  } catch (err) {
+    // Provide clearer message for worker / fetch issues
+    const msg =
+      err && err.message
+        ? `PDF parse failed: ${err.message}`
+        : 'PDF parse failed'
+    console.error(msg, err)
+    throw new Error(msg)
   }
-  
-  return text
 }
 
 async function parseDOCX(file) {
-  const arrayBuffer = await file.arrayBuffer()
-  const result = await mammoth.extractRawText({ arrayBuffer })
-  return result.value
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    // If you target the browser, ensure you have mammoth/browser build installed.
+    const result = await mammoth.extractRawText({ arrayBuffer })
+    return result.value || ''
+  } catch (err) {
+    console.error('DOCX parse failed:', err)
+    throw err
+  }
 }
 
 function extractFields(text) {
   const normalizedText = text.replace(/\s+/g, ' ').trim()
-  
-  // Extract email
+
+  // Email
   const emailRegex = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
   const emailMatch = normalizedText.match(emailRegex)
   const email = emailMatch ? emailMatch[0] : ''
 
-  // Extract phone number
-  const phoneRegex = /(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/
+  // Phone: capture common international/local forms, return digits only (min 7)
+  const phoneRegex =
+    /((?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,4}\)?[-.\s]?)?\d{3,4}[-.\s]?\d{3,4})/
   const phoneMatch = normalizedText.match(phoneRegex)
-  const phone = phoneMatch ? phoneMatch[0].replace(/\D/g, '') : ''
+  const rawPhone = phoneMatch ? phoneMatch[0] : ''
+  const phoneDigits = rawPhone.replace(/\D/g, '')
+  const phone = phoneDigits.length >= 7 ? phoneDigits : ''
 
-  // Extract name (heuristic approach)
-  const lines = text.split('\n').filter(line => line.trim())
+  // Name: heuristic from top lines
+  const lines = text
+    .split('\n')
+    .map(l => l.replace(/[^A-Za-z\s'-]/g, '').trim())
+    .filter(Boolean)
+
   let name = ''
-  
-  // Look for name patterns at the beginning of the resume
-  for (let i = 0; i < Math.min(5, lines.length); i++) {
-    const line = lines[i].trim()
-    
-    // Skip common header words and contact info
-    if (line.toLowerCase().includes('resume') || 
-        line.toLowerCase().includes('cv') ||
-        line.includes('@') ||
-        /\d{3}-\d{3}-\d{4}/.test(line)) {
+  for (let i = 0; i < Math.min(7, lines.length); i++) {
+    const line = lines[i]
+    const lower = line.toLowerCase()
+    if (
+      lower.includes('resume') ||
+      lower.includes('curriculum vitae') ||
+      lower.includes('cv') ||
+      line.includes('@') ||
+      /\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(line)
+    ) {
       continue
     }
-    
-    // Look for lines with 2-3 capitalized words (likely names)
-    const words = line.split(' ').filter(word => word.trim())
-    const capitalizedWords = words.filter(word => 
-      /^[A-Z][a-z]+$/.test(word) && word.length > 1
-    )
-    
-    if (capitalizedWords.length >= 2 && capitalizedWords.length <= 3 && line.length < 50) {
+
+    const words = line.split(/\s+/).filter(Boolean)
+    const capitalizedWords = words.filter(w => /^[A-Z][a-z-']+$/.test(w) && w.length > 1)
+
+    if (capitalizedWords.length >= 2 && capitalizedWords.length <= 4 && line.length < 60) {
       name = capitalizedWords.join(' ')
+      break
+    }
+
+    if (!name && words.length === 1 && /^[A-Z][a-z-']+$/.test(words[0]) && words[0].length > 1) {
+      name = words[0]
       break
     }
   }
 
-  return {
-    name,
-    email,
-    phone,
-  }
+  return { name, email, phone }
 }
