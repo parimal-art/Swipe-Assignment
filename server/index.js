@@ -25,11 +25,15 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-app.post('/api/generate-question', async (req, res) => {
-  // Your logic here
-  res.json({ question: 'Example question?' });
+// Helpful GET for quick browser testing (does not call OpenAI)
+app.get('/api/generate-question', (req, res) => {
+  return res.json({
+    info: 'Use POST /api/generate-question with JSON body { "difficulty": "easy|medium|hard" }'
+  })
 })
 
+// Real POST handlers
+app.post('/api/generate-question', generateQuestionHandler)
 app.post('/api/score-answer', scoreAnswerHandler)
 app.post('/api/generate-summary', generateSummaryHandler)
 
@@ -45,8 +49,8 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' })
 })
 
-app.listen(3001, () => {
-  console.log('🚀 Swipe.AI Server running on port 3001')
+app.listen(PORT, () => {
+  console.log(`🚀 Swipe.AI Server running on port ${PORT}`)
   console.log(`📝 Health check: http://localhost:${PORT}/health`)
   if (!process.env.OPENAI_API_KEY) {
     console.warn('⚠️  WARNING: OPENAI_API_KEY not found in environment variables')
