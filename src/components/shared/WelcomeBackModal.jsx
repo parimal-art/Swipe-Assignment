@@ -1,13 +1,23 @@
+// src/components/shared/WelcomeBackModal.jsx
+import React from 'react'
 import { Modal, Card, Button, List, Tag } from 'antd'
 import { useDispatch, useSelector } from 'react-redux'
 import { Play, RotateCcw, User } from 'lucide-react'
 import { hideWelcomeBackModal } from '../../redux/uiSlice'
 import { setCurrentCandidate, resumeInterview, removeCandidate } from '../../redux/candidatesSlice'
 import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
+
+// Ensure relativeTime plugin is loaded so .fromNow() works even if not set globally
+dayjs.extend(relativeTime)
 
 function WelcomeBackModal() {
   const dispatch = useDispatch()
   const { welcomeBackModal } = useSelector(state => state.ui)
+
+  const candidates = (welcomeBackModal && Array.isArray(welcomeBackModal.candidates))
+    ? welcomeBackModal.candidates
+    : []
 
   const handleResume = (candidateId) => {
     dispatch(setCurrentCandidate(candidateId))
@@ -32,7 +42,7 @@ function WelcomeBackModal() {
           <span>Welcome Back!</span>
         </div>
       }
-      visible={welcomeBackModal.visible}
+      open={!!welcomeBackModal?.visible}
       onCancel={handleClose}
       footer={null}
       width={600}
@@ -40,15 +50,15 @@ function WelcomeBackModal() {
     >
       <div className="mb-4">
         <p className="text-gray-600">
-          We found {welcomeBackModal.candidates.length} incomplete interview{welcomeBackModal.candidates.length > 1 ? 's' : ''}. 
+          We found {candidates.length} incomplete interview{candidates.length > 1 ? 's' : ''}.
           Would you like to resume or start over?
         </p>
       </div>
 
       <List
-        dataSource={welcomeBackModal.candidates}
+        dataSource={candidates}
         renderItem={(candidate) => (
-          <List.Item className="px-0">
+          <List.Item className="px-0" key={candidate.id}>
             <Card size="small" className="w-full">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
@@ -60,11 +70,11 @@ function WelcomeBackModal() {
                       {candidate.name || 'Unnamed Candidate'}
                     </h4>
                     <div className="flex items-center space-x-2 text-sm text-gray-500">
-                      <span>Question {candidate.currentQuestionIndex + 1} of 6</span>
+                      <span>Question {Math.max(0, (candidate.currentQuestionIndex || 0) + 1)} of 6</span>
                       <Tag color={candidate.status === 'paused' ? 'orange' : 'blue'}>
                         {candidate.status}
                       </Tag>
-                      <span>• {dayjs(candidate.createdAt).fromNow()}</span>
+                      <span>• {candidate.createdAt ? dayjs(candidate.createdAt).fromNow() : 'unknown'}</span>
                     </div>
                   </div>
                 </div>

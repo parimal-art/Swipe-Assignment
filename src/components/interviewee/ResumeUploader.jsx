@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { Card, Upload, Button, message, Spin } from 'antd'
 import { Upload as UploadIcon, FileText, CheckCircle } from 'lucide-react'
@@ -7,38 +7,58 @@ import { parseResume } from '../../utils/resumeParser'
 
 const { Dragger } = Upload
 
-function ResumeUploader({ candidate, onNext }) {
+function ResumeUploader({ candidate = {}, onNext = () => {} }) {
   const dispatch = useDispatch()
   const [uploading, setUploading] = useState(false)
+  const [messageApi, contextHolder] = message.useMessage()
+
+  const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
 
   const handleUpload = async (file) => {
+    // basic validation
+    if (!file) return false
+    if (file.size > MAX_SIZE_BYTES) {
+      messageApi.error('File too large. Maximum allowed size is 10MB.')
+      return false
+    }
+
     setUploading(true)
-    
+
     try {
       const parsedData = await parseResume(file)
-      
-      dispatch(updateProfile({
-        id: candidate.id,
-        profile: {
-          resume: {
-            fileName: file.name,
-            textExtracted: true,
+
+      dispatch(
+        updateProfile({
+          id: candidate.id,
+          profile: {
+            resume: {
+              fileName: file.name,
+              textExtracted: true,
+            },
+            ...parsedData,
           },
-          ...parsedData,
-        },
-      }))
-      
-      message.success('Resume uploaded and parsed successfully!')
-      setTimeout(onNext, 1500)
-      
+        })
+      )
+
+      messageApi.success('Resume uploaded and parsed successfully!')
+
+      // Small delay for UX then proceed
+      setTimeout(() => {
+        try {
+          onNext()
+        } catch (e) {
+          // swallow
+        }
+      }, 700)
     } catch (error) {
       console.error('Resume parsing error:', error)
-      message.error('Failed to parse resume. Please try again.')
+      messageApi.error('Failed to parse resume. Please try again.')
     } finally {
       setUploading(false)
     }
-    
-    return false // Prevent default upload
+
+    // Prevent default Upload behavior (we handle file client-side)
+    return false
   }
 
   const uploadProps = {
@@ -51,6 +71,7 @@ function ResumeUploader({ candidate, onNext }) {
 
   return (
     <Card>
+      {contextHolder}
       <div className="max-w-2xl mx-auto py-8">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -79,12 +100,8 @@ function ResumeUploader({ candidate, onNext }) {
               <p className="ant-upload-drag-icon">
                 <UploadIcon size={48} className="text-blue-500" />
               </p>
-              <p className="ant-upload-text text-lg font-medium">
-                Click or drag file to this area to upload
-              </p>
-              <p className="ant-upload-hint text-gray-500">
-                Support for PDF and DOCX files. Maximum file size: 10MB
-              </p>
+              <p className="ant-upload-text text-lg font-medium">Click or drag file to this area to upload</p>
+              <p className="ant-upload-hint text-gray-500">Support for PDF and DOCX files. Maximum file size: 10MB</p>
             </Dragger>
           </Spin>
         )}

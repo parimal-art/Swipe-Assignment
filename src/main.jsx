@@ -1,11 +1,17 @@
+// src/main.jsx
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Provider } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
 import { ConfigProvider } from 'antd'
+import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
 import App from './App.jsx'
 import { store, persistor } from './redux/store.js'
 import './index.css'
+
+// enable Day.js relativeTime plugin so dayjs(...).fromNow() works
+dayjs.extend(relativeTime)
 
 const theme = {
   token: {
