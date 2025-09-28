@@ -25,7 +25,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-// Helpful GET for quick browser testing (does not call OpenAI)
+// Helpful GET for quick browser testing (does not call Gemini)
 app.get('/api/generate-question', (req, res) => {
   return res.json({
     info: 'Use POST /api/generate-question with JSON body { "difficulty": "easy|medium|hard" }'
@@ -52,9 +52,9 @@ app.use('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Swipe.AI Server running on port ${PORT}`)
   console.log(`📝 Health check: http://localhost:${PORT}/health`)
-  if (!process.env.OPENAI_API_KEY) {
-    console.warn('⚠️  WARNING: OPENAI_API_KEY not found in environment variables')
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn('⚠️  WARNING: GEMINI_API_KEY not found in environment variables')
   } else {
-    console.log('✅ OpenAI API key configured')
+    console.log('✅ Gemini API key configured')
   }
 })
